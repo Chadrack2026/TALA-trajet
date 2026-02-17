@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TALA Trajet — Confirmation</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Librairie jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  
+  <style>
+  .conts {
+      max-width: 700px;
+      margin: 24px auto;
+      padding: 0 24px;
+    }
+  </style>
+  
+
+<header class="site-header">
+  <!-- Logo à gauche -->
+  <div class="brand">TALA Trajet</div>
+
+  <!-- Navigation au centre -->
+  <nav class="main-nav" id="navMenu">
+    <a href="index.html">Accueil</a>
+    <a href="results.html">Résultats</a>
+    <a href="booking.html">Réservation</a>
+    <a href="confirmation.html" class="active">Confirmation</a>
+    
+  </nav>
+
+  <!-- Bouton menu à droite -->
+  <button class="menu-btn" id="menuToggle" aria-label="Ouvrir le menu">☰</button>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="containere">
+      <h1 class="hero-title">Confirmation de votre réservation</h1>
+      <p class="hero-sub">Merci d’avoir réservé avec TALA Trajet</p>
+    </div>
+  </section>
+
+  <section class="conts">
+    <div class="cart">
+      <h2>Détails de la réservation</h2>
+      <div id="confirmationDetails"></div>
+
+      <h2>Sièges réservés</h2>
+      <div id="seatsDisplay" class="card"></div>
+
+      <!-- Bouton pour télécharger le billet -->
+      <button onclick="downloadTicket()" class="btn-login" style="margin-top:15px;">
+        Télécharger mon billet 🎫
+      </button>
+
+      <button onclick="window.location.href='index.html'" class="btn-login" style="margin-top:15px;">
+        Retour à l'accueil
+      </button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <p>© 2026 TALA Trajet — Tous droits réservés</p>
+  </div>
+</footer>
+
+  <!-- Librairie jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Librairie QRCode.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+// Fonction utilitaire pour formater le numéro
+function formatReservationId(rawId) {
+  // rawId = l'ID brut (ex: 11)
+  return `TALA-2026-${String(rawId).padStart(3, "0")}`;
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const confirmationDetails = document.getElementById("confirmationDetails");
+  const seatsDisplay = document.getElementById("seatsDisplay");
+
+  /* ===========================
+     SUPABASE INIT
+  =========================== */
+  const { createClient } = window.supabase;
+
+  const supabaseUrl = "https://iyiuysgwbreaqkepilqn.supabase.co";
+  const supabaseKey =
+    "sb_publishable_uPwAsJaGU4m_ejyajmEv2A_dLgqIM3h";
+
+  const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
+  /* ===========================
+     GET reservation_id FROM URL
+  =========================== */
+  const params = new URLSearchParams(window.location.search);
+  const reservationId = params.get("reservation_id");
+
+  if (!reservationId) {
+    confirmationDetails.innerHTML = `
+      <p style="color:#e74c3c;">⚠ Réservation introuvable.</p>
+      <button onclick="window.location.href='results.html'" class="btn-download">
+        Retour
+      </button>
+    `;
+    return;
+  }
+
+  /* ===========================
+     LOAD RESERVATION + TRAJET
+  =========================== */
+  const { data: reservation, error } = await supabaseClient
+    .from("reservations")
+    .select(`
+      id,
+      ticket_number,
+      client_name,
+      email,
+      client_phone,
+      passengers,
+      passengers_list,
+      statut_paiement,
+      created_at,
+
+      trajet:trajets (
+        ville_depart,
+        ville_arrivee,
+        date_depart,
+        heure_depart,
+        prix,
+
+        bus:bus (
+          numero_bus,
+          agence:agences ( nom )
+        )
+      )
+    `)
+    .eq("id", reservationId)
+    .single();
+
+  if (error || !reservation) {
+    confirmationDetails.innerHTML = `
+      <p style="color:#e74c3c;">⚠ Impossible de charger la réservation.</p>
+    `;
+    console.error(error);
+    return;
+  }
+
+  /* ===========================
+     CALCUL PRIX TOTAL
+  =========================== */
+  const prixUnitaire = reservation.trajet?.prix || 0;
+  const totalPrice = prixUnitaire * reservation.passengers;
+
+  /* ===========================
+     AFFICHAGE CONFIRMATION
+  =========================== */
+  confirmationDetails.innerHTML = `
+    <h3 style="margin-bottom:10px;">🎫 Billet confirmé</h3>
+
+    <p><strong>Ticket :</strong> ${reservation.ticket_number}</p>
+
+    <hr/>
+
+    <p><strong>👤 Nom :</strong> ${reservation.client_name}</p>
+    <p><strong>📧 Email :</strong> ${reservation.email || "Non renseigné"}</p>
+    <p><strong>📞 Téléphone :</strong> ${reservation.client_phone}</p>
+
+    <hr/>
+
+    <p><strong>🚌 Trajet :</strong> 
+      ${reservation.trajet.ville_depart} → ${reservation.trajet.ville_arrivee}
+    </p>
+
+    <p><strong>📅 Départ :</strong> 
+      ${reservation.trajet.date_depart} à ${reservation.trajet.heure_depart}
+    </p>
+
+    <p><strong>🚍 Bus :</strong> ${reservation.trajet.bus.numero_bus}</p>
+    <p><strong>🏢 Agence :</strong> ${reservation.trajet.bus.agence.nom}</p>
+
+    <hr/>
+
+    <p><strong>👥 Passagers :</strong> ${reservation.passengers}</p>
+    <p><strong>💰 Prix total :</strong> ${totalPrice.toLocaleString()} FC</p>
+
+    <p style="margin-top:10px; font-weight:600; color:#27ae60;">
+      Paiement : ${
+        reservation.statut_paiement === "PAYE"
+          ? "✅ Confirmé"
+          : "⏳ En attente"
+      }
+    </p>
+  `;
+
+  /* ===========================
+     AFFICHAGE SIÈGES
+  =========================== */
+  const seats = reservation.passengers_list || [];
+
+  if (seats.length > 0) {
+    seatsDisplay.innerHTML =
+      "<ul>" +
+      seats.map((seat) => `<li>Siège ${seat}</li>`).join("") +
+      "</ul>";
+  } else {
+    seatsDisplay.innerHTML = "<p>Aucun siège réservé.</p>";
+  }
+
+  /* ===========================
+     PDF DOWNLOAD BUTTON
+  =========================== */
+  window.downloadTicket = () =>
+    generatePDF(reservation.ticket_number, reservation, totalPrice);
+});
+
+/* ===========================
+   QR CODE
+=========================== */
+function generateQRCode(ticketNumber) {
+  return new Promise((resolve) => {
+    const qrDiv = document.createElement("div");
+
+    new QRCode(qrDiv, {
+      text: `https://talatrajet.com/verification.html?ticket=${ticketNumber}`,
+      width: 200,
+      height: 200,
+      correctLevel: QRCode.CorrectLevel.H,
+    });
+
+    setTimeout(() => {
+      const canvas = qrDiv.querySelector("canvas");
+      resolve(canvas.toDataURL("image/png"));
+    }, 300);
+  });
+}
+
+/* ===========================
+   PDF BILLET COMPLET
+=========================== */
+async function generatePDF(ticketNumber, reservation, totalPrice) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  // Bandeau vert
+  doc.setFillColor(39, 174, 96);
+  doc.rect(0, 0, 210, 25, "F");
+
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.text("TALA Trajet — Billet Officiel", 20, 17);
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+
+  doc.text(`Ticket : ${ticketNumber}`, 20, 40);
+  doc.text(`Nom : ${reservation.client_name}`, 20, 50);
+
+  doc.text(
+    `Trajet : ${reservation.trajet.ville_depart} → ${reservation.trajet.ville_arrivee}`,
+    20,
+    65
+  );
+
+  doc.text(
+    `Départ : ${reservation.trajet.date_depart} à ${reservation.trajet.heure_depart}`,
+    20,
+    75
+  );
+
+  doc.text(`Passagers : ${reservation.passengers}`, 20, 90);
+  doc.text(`Prix total : ${totalPrice.toLocaleString()} FC`, 20, 100);
+
+  // Sièges
+  doc.text("Sièges :", 20, 115);
+  reservation.passengers_list.forEach((seat, index) => {
+    doc.text(`• Siège ${seat}`, 25, 125 + index * 7);
+  });
+
+  // QR Code
+  const qrImage = await generateQRCode(ticketNumber);
+  doc.addImage(qrImage, "PNG", 60, 170, 90, 90);
+
+  // Footer
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text("© 2026 TALA Trajet — Tous droits réservés", 20, 285);
+
+  doc.save(`Billet_${ticketNumber}.pdf`);
+}
+  
+</script>
+
+</body>
+</html>

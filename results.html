@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TALA Trajet — Résultats</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+  <!-- HEADER -->
+  <header class="site-header">
+    <div class="brand">TALA Trajet</div>
+
+
+    <!-- Bouton menu mobile -->
+    <button class="menu-btn" id="menuToggle" aria-label="Ouvrir le menu">
+    </button>
+  </header>
+
+  <!-- MAIN -->
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1 class="hero-title">Résultats de votre recherche</h1>
+        <p class="hero-sub">Voici les trajets disponibles selon vos critères.</p>
+      </div>
+    </section>
+
+    <section class="container">
+      <div id="resultsList" class="cards"></div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <p>© 2026 TALA Trajet — Tous droits réservés</p>
+    </div>
+  </footer>
+
+  <!-- SCRIPT -->
+  <script>
+    /*********************************************************
+     * 1. Connexion Supabase
+     *********************************************************/
+    const { createClient } = window.supabase;
+
+    const supabaseUrl = "https://iyiuysgwbreaqkepilqn.supabase.co";
+    const supabaseKey = "sb_publishable_uPwAsJaGU4m_ejyajmEv2A_dLgqIM3h";
+
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
+    /*********************************************************
+     * 2. Paramètres URL
+     *********************************************************/
+    const params = new URLSearchParams(window.location.search);
+
+    const from = params.get("from");
+    const to = params.get("to");
+    const date = params.get("date");
+    const passengers = parseInt(params.get("passengers")) || 1;
+
+    /*********************************************************
+     * 3. Charger les trajets disponibles
+     *********************************************************/
+    async function loadResults() {
+      const container = document.getElementById("resultsList");
+
+      container.innerHTML =
+        "<div class='loading'>Chargement des trajets...</div>";
+
+      /*******************************************************
+       * Filtrage directement dans Supabase
+       *******************************************************/
+      let query = supabaseClient
+        .from("trajets")
+        .select(`
+          id,
+          ville_depart,
+          ville_arrivee,
+          date_depart,
+          heure_depart,
+          prix,
+          bus:bus (
+            id,
+            numero_bus,
+            capacite,
+            agence:agences ( nom )
+          )
+        `);
+
+      if (from) query = query.ilike("ville_depart", from);
+      if (to) query = query.ilike("ville_arrivee", to);
+
+      const { data, error } = await query;
+
+      container.innerHTML = "";
+
+      if (error) {
+        container.innerHTML = `<p>Erreur Supabase : ${error.message}</p>`;
+        return;
+      }
+
+      /*******************************************************
+       * Filtrage local supplémentaire (date + places)
+       *******************************************************/
+      const filtered = data.filter(trajet => {
+
+        // Correction format date
+        const matchDate = date
+          ? trajet.date_depart?.startsWith(date)
+          : true;
+
+        // Vérifier places disponibles
+        const seatsAvailable =
+          (trajet.bus?.capacite || 0) >= passengers;
+
+        return matchDate && seatsAvailable;
+      });
+
+      /*******************************************************
+       * Aucun résultat
+       *******************************************************/
+      if (filtered.length === 0) {
+        container.innerHTML = "<p>Aucun trajet trouvé.</p>";
+        return;
+      }
+
+      /*******************************************************
+       * Tri par prix croissant
+       *******************************************************/
+      filtered.sort((a, b) => a.prix - b.prix);
+
+      /*******************************************************
+       * Compteur résultats
+       *******************************************************/
+      container.innerHTML = `<p><strong>${filtered.length}</strong> trajet(s) trouvé(s)</p>`;
+
+      /*******************************************************
+       * Affichage des trajets
+       *******************************************************/
+      filtered.forEach(trajet => {
+        container.innerHTML += `
+          <div class="card">
+            <div class="card-body">
+              <h4>${trajet.ville_depart} → ${trajet.ville_arrivee}</h4>
+
+              <p>
+                Agence :
+                <strong>${trajet.bus?.agence?.nom || "N/A"}</strong>
+              </p>
+
+              <p>
+                Date : ${trajet.date_depart}
+                • Heure : ${trajet.heure_depart}
+              </p>
+
+              <p>
+                Prix : <strong>${trajet.prix} FC</strong>
+              </p>
+
+              <p>
+                Places disponibles :
+                <strong>${trajet.bus?.capacite || 0}</strong>
+              </p>
+
+              <button class="btn"
+                onclick="selectTrip('${trajet.id}')">
+                Réserver
+              </button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    /*********************************************************
+     * 4. Sélection trajet → booking.html
+     *********************************************************/
+    function selectTrip(id) {
+      window.location.href =
+        `booking.html?trajet_id=${id}&passengers=${passengers}`;
+    }
+
+    /*********************************************************
+     * 5. Menu mobile toggle
+     *********************************************************/
+    const menuToggle = document.getElementById("menuToggle");
+    const navMenu = document.getElementById("navMenu");
+
+    menuToggle.addEventListener("click", () => {
+      navMenu.classList.toggle("open");
+    });
+
+    /*********************************************************
+     * 6. Lancer au chargement
+     *********************************************************/
+    loadResults();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Paiement réussi - TALA</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f8; padding: 20px; display: flex; justify-content: center; }
+    .card { max-width: 500px; width: 100%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,.1); text-align: center; }
+    .success-icon { color: #28a745; font-size: 50px; margin-bottom: 10px; }
+    .ticket-box { border: 2px dashed #333; padding: 20px; margin-top: 20px; text-align: left; background: #fffcf0; }
+    .btn-print { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; width: 100%; margin-top: 20px; font-weight: bold; }
+    .error { color: #dc3545; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div class="card" id="content">
+  <p>🔄 Confirmation de votre paiement en cours...</p>
+</div>
+
+<script>
+  const supabaseUrl = "https://iyiuysgwbreaqkepilqn.supabase.co";
+  const supabaseKey = "sb_publishable_uPwAsJaGU4m_ejyajmEv2A_dLgqIM3h";
+  const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+  const params = new URLSearchParams(window.location.search);
+  const reservationId = params.get("reservation_id");
+
+  async function validateAndLoad() {
+    if (!reservationId) {
+      document.getElementById("content").innerHTML = "<p class='error'>❌ Erreur : ID de réservation manquant.</p>";
+      return;
+    }
+
+    // 1. Mise à jour automatique du statut de 'en_attente' vers 'payé'
+    const { error: updateError } = await supabaseClient
+      .from("reservations")
+      .update({ statut: "payé", mode_paiement: "Shwary" })
+      .eq("id", reservationId)
+      .eq("statut", "en_attente"); // Sécurité : on ne met à jour que si c'était en attente
+
+    if (updateError) {
+      console.error("Détails mise à jour:", updateError);
+    }
+
+    // 2. Récupération des données complètes pour l'affichage du ticket
+    const { data, error } = await supabaseClient
+      .from("reservations")
+      .select(`
+        ticket_number,
+        statut,
+        client_name,
+        client_phone,
+        montant,
+        trajets (
+          ville_depart,
+          ville_arrivee,
+          date_depart,
+          heure_depart
+        )
+      `)
+      .eq("id", reservationId)
+      .maybeSingle();
+
+    if (error || !data) {
+      document.getElementById("content").innerHTML = "<p class='error'>❌ Erreur lors du chargement des données.</p>";
+      return;
+    }
+
+    // 3. Affichage final du ticket
+    if (data.statut === "payé") {
+      document.getElementById("content").innerHTML = `
+        <div class="success-icon">✔</div>
+        <h2 style="margin:0;">Paiement Réussi !</h2>
+        <p>Merci <strong>${data.client_name}</strong>, votre réservation est confirmée.</p>
+        
+        <div class="ticket-box">
+          <h3 style="text-align:center; margin-top:0; border-bottom:1px solid #ddd; padding-bottom:10px;">TICKET TALA</h3>
+          <p><strong>N° TICKET :</strong> <span style="color:#007bff; font-size:1.2em;">${data.ticket_number}</span></p>
+          <p><strong>TRAJET :</strong> ${data.trajets.ville_depart} ➔ ${data.trajets.ville_arrivee}</p>
+          <p><strong>DÉPART :</strong> ${data.trajets.date_depart} à ${data.trajets.heure_depart}</p>
+          <p><strong>TÉLÉPHONE :</strong> ${data.client_phone}</p>
+          <p><strong>MONTANT :</strong> ${data.montant} FC</p>
+        </div>
+
+        <button class="btn-print" onclick="window.print()">🖨 Imprimer mon ticket</button>
+        <p style="margin-top:15px; font-size:13px; color:#666;">Un SMS de confirmation sera envoyé sous peu.</p>
+      `;
+    } else {
+      document.getElementById("content").innerHTML = "<p class='error'>⚠️ Le paiement n'a pas pu être validé automatiquement.</p>";
+    }
+  }
+
+  validateAndLoad();
+</script>
+
+</body>
+</html>
