@@ -137,12 +137,12 @@ document.addEventListener("DOMContentLoaded", function () {
         message: message     // correspond à {{message}}
       })
       .then(function () {
-        alert("Message envoyé avec succès !");
-        form.reset();
-      })
-      .catch(function (error) {
-        console.error("Erreur EmailJS :", error);
-        alert("Une erreur est survenue lors de l'envoi.");
+  showToast("✅ Message envoyé avec succès !", "success");
+  form.reset();
+})
+.catch(function (error) {
+  console.error("Erreur EmailJS :", error);
+  showToast("❌ Une erreur est survenue lors de l'envoi.", "error");
       });
 
     });
@@ -150,7 +150,30 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 </script>
- 
+
+<script>
+  function showToast(message, type = "info", duration = 3000) {
+  const container = document.getElementById("toast-container");
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.innerText = message;
+  container.appendChild(toast);
+
+  // animation d’apparition
+  setTimeout(() => toast.classList.add("show"), 100);
+
+  // disparition après durée
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 500);
+  }, duration);
+}
+  
+</script>
+
+
+  <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
 
 </body>
 </html>
