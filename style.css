@@ -435,3 +435,27 @@ clip: rect(0,0,0,0);
       margin-bottom: 20px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     }
+
+/*===Notifications===*/
+
+.toast {
+  min-width: 250px;
+  margin-bottom: 10px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: #fff;
+  font-family: 'Poppins', sans-serif;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.5s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.toast.success { background-color: #27ae60; }  /* vert */
+.toast.error { background-color: #e74c3c; }    /* rouge */
+.toast.info { background-color: #3498db; }     /* bleu */
