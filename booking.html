@@ -215,6 +215,28 @@
     button:hover {
       transform: translateY(-2px);
     }
+
+    .toast {
+  min-width: 250px;
+  margin-bottom: 10px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: #fff;
+  font-family: 'Poppins', sans-serif;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.5s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.toast.success { background-color: #27ae60; }  /* vert */
+.toast.error { background-color: #e74c3c; }    /* rouge */
+.toast.info { background-color: #3498db; }     /* bleu */
   </style>
 </head>
 
@@ -486,12 +508,17 @@ document.getElementById("bookingForm").addEventListener("submit", async (e) => {
     .select()
     .single();
 
-  if (error || !reservation) {
-    alert("Erreur réservation : " + error.message);
-    return;
-  }
+  if (error) {
+  showToast("❌ Erreur réservation : " + error.message, "error");
+  return;
+}
 
-  alert("📌 Réservation enregistrée ! Paiement en cours...");
+if (!reservation) {
+  showToast("⚠️ Réservation non créée, veuillez réessayer.", "info");
+  return;
+}
+
+showToast("✅ Réservation enregistrée ! Paiement en cours...", "success");
 
   // Appel Orange-init
   try {
@@ -546,6 +573,29 @@ document.getElementById("bookingForm").addEventListener("submit", async (e) => {
 loadTrip();
 
 </script>
+
+  <script>
+  function showToast(message, type = "info", duration = 3000) {
+  const container = document.getElementById("toast-container");
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.innerText = message;
+  container.appendChild(toast);
+
+  // animation d’apparition
+  setTimeout(() => toast.classList.add("show"), 100);
+
+  // disparition après durée
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 500);
+  }, duration);
+}
+  
+  </script>
+
+  <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
 
 </body>
 </html>
