@@ -17,11 +17,15 @@
   <!-- HEADER -->
   <header class="site-header">
     <div class="brand">TALA Trajet</div>
+    
+    <nav class="main-nav" id="navMenu">
+    <a href="index.html"> Accueil</a>
+    <a href="results.html" class="active">Résultats</a>
+    </nav>
 
 
-    <!-- Bouton menu mobile -->
-    <button class="menu-btn" id="menuToggle" aria-label="Ouvrir le menu">
-    </button>
+      <!-- Bouton menu à droite -->
+  <button class="menu-btn" id="menuToggle" aria-label="Ouvrir le menu">☰</button>
   </header>
 
   <!-- MAIN -->
@@ -48,161 +52,150 @@
   <!-- SCRIPT -->
   <script>
     /*********************************************************
-     * 1. Connexion Supabase
-     *********************************************************/
-    const { createClient } = window.supabase;
+ * 1. Connexion Supabase
+ *********************************************************/
+const { createClient } = window.supabase;
 
-    const supabaseUrl = "https://iyiuysgwbreaqkepilqn.supabase.co";
-    const supabaseKey = "sb_publishable_uPwAsJaGU4m_ejyajmEv2A_dLgqIM3h";
+const supabaseUrl = "https://fsxtngwitqpcfobijxqk.supabase.co";
+const supabaseKey = "sb_publishable_J5FXAkT-ZPyiAEQP6oB8CA_wgDuYSm-";
 
-    const supabaseClient = createClient(supabaseUrl, supabaseKey);
+const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-    /*********************************************************
-     * 2. Paramètres URL
-     *********************************************************/
-    const params = new URLSearchParams(window.location.search);
+/*********************************************************
+ * 2. Paramètres URL
+ *********************************************************/
+const params = new URLSearchParams(window.location.search);
 
-    const from = params.get("from");
-    const to = params.get("to");
-    const date = params.get("date");
-    const passengers = parseInt(params.get("passengers")) || 1;
+const from = params.get("from");
+const to = params.get("to");
+const date = params.get("date");
+const passengers = parseInt(params.get("passengers")) || 1;
 
-    /*********************************************************
-     * 3. Charger les trajets disponibles
-     *********************************************************/
-    async function loadResults() {
-      const container = document.getElementById("resultsList");
+/*********************************************************
+ * 3. Charger les trajets disponibles
+ *********************************************************/
+async function loadResults() {
+  const container = document.getElementById("resultsList");
 
-      container.innerHTML =
-        "<div class='loading'>Chargement des trajets...</div>";
+  container.innerHTML = "<div class='loading'>Chargement des trajets...</div>";
 
-      /*******************************************************
-       * Filtrage directement dans Supabase
-       *******************************************************/
-      let query = supabaseClient
-        .from("trajets")
-        .select(`
-          id,
-          ville_depart,
-          ville_arrivee,
-          date_depart,
-          heure_depart,
-          prix,
-          bus:bus (
-            id,
-            numero_bus,
-            capacite,
-            agence:agences ( nom )
-          )
-        `);
+  /*******************************************************
+   * Requête Supabase avec jointures
+   *******************************************************/
+  let query = supabaseClient
+    .from("schedules")
+    .select(`
+      id,
+      departure_time,
+      arrival_time,
+      price,
+      available_seats,
+      bus:bus_id (
+        bus_number,
+        total_seats,
+        bus_type,
+        agency:agency_id ( name )
+      ),
+      route:route_id (
+        departure_city,
+        arrival_city
+      )
+    `)
+    .eq('status', 'active'); // on ne prend que les trajets actifs
 
-      if (from) query = query.ilike("ville_depart", from);
-      if (to) query = query.ilike("ville_arrivee", to);
+  // Filtre sur ville départ et arrivée
+  if (from) query = query.ilike("route.departure_city", `%${from}%`);
+  if (to) query = query.ilike("route.arrival_city", `%${to}%`);
 
-      const { data, error } = await query;
+  const { data, error } = await query;
 
-      container.innerHTML = "";
+  container.innerHTML = "";
 
-      if (error) {
-        container.innerHTML = `<p>Erreur Supabase : ${error.message}</p>`;
-        return;
-      }
+  if (error) {
+    container.innerHTML = `<p>Erreur Supabase : ${error.message}</p>`;
+    return;
+  }
 
-      /*******************************************************
-       * Filtrage local supplémentaire (date + places)
-       *******************************************************/
-      const filtered = data.filter(trajet => {
+  /*******************************************************
+   * Filtrage local supplémentaire (date + places)
+   *******************************************************/
+  const filtered = data.filter(schedule => {
+    // Vérification de la date si renseignée
+    const matchDate = date
+      ? new Date(schedule.departure_time).toISOString().startsWith(date)
+      : true;
 
-        // Correction format date
-        const matchDate = date
-          ? trajet.date_depart?.startsWith(date)
-          : true;
+    // Vérification du nombre de places disponibles
+    const seatsAvailable = (schedule.available_seats || 0) >= passengers;
 
-        // Vérifier places disponibles
-        const seatsAvailable =
-          (trajet.bus?.capacite || 0) >= passengers;
+    return matchDate && seatsAvailable;
+  });
 
-        return matchDate && seatsAvailable;
-      });
+  /*******************************************************
+   * Aucun résultat trouvé
+   *******************************************************/
+  if (filtered.length === 0) {
+    container.innerHTML = "<p>Aucun trajet trouvé.</p>";
+    return;
+  }
 
-      /*******************************************************
-       * Aucun résultat
-       *******************************************************/
-      if (filtered.length === 0) {
-        container.innerHTML = "<p>Aucun trajet trouvé.</p>";
-        return;
-      }
+  /*******************************************************
+   * Tri des trajets par prix croissant
+   *******************************************************/
+  filtered.sort((a, b) => a.price - b.price);
 
-      /*******************************************************
-       * Tri par prix croissant
-       *******************************************************/
-      filtered.sort((a, b) => a.prix - b.prix);
+  /*******************************************************
+   * Affichage des résultats
+   *******************************************************/
+  container.innerHTML = `<p><strong>${filtered.length}</strong> trajet(s) trouvé(s)</p>`;
 
-      /*******************************************************
-       * Compteur résultats
-       *******************************************************/
-      container.innerHTML = `<p><strong>${filtered.length}</strong> trajet(s) trouvé(s)</p>`;
+  filtered.forEach(schedule => {
+    const departureDate = new Date(schedule.departure_time).toLocaleString();
+    const arrivalDate = new Date(schedule.arrival_time).toLocaleString();
 
-      /*******************************************************
-       * Affichage des trajets
-       *******************************************************/
-      filtered.forEach(trajet => {
-        container.innerHTML += `
-          <div class="card">
-            <div class="card-body">
-              <h4>${trajet.ville_depart} → ${trajet.ville_arrivee}</h4>
+    container.innerHTML += `
+      <div class="card">
+        <div class="card-body">
+          <h4>${schedule.route.departure_city} → ${schedule.route.arrival_city}</h4>
 
-              <p>
-                Agence :
-                <strong>${trajet.bus?.agence?.nom || "N/A"}</strong>
-              </p>
+          <p>Agence : <strong>${schedule.bus.agency?.name || "N/A"}</strong></p>
 
-              <p>
-                Date : ${trajet.date_depart}
-                • Heure : ${trajet.heure_depart}
-              </p>
+          <p>Départ : ${departureDate} • Arrivée : ${arrivalDate}</p>
 
-              <p>
-                Prix : <strong>${trajet.prix} FC</strong>
-              </p>
+          <p>Prix : <strong>${schedule.price} FC</strong></p>
 
-              <p>
-                Places disponibles :
-                <strong>${trajet.bus?.capacite || 0}</strong>
-              </p>
+          <p>Places disponibles : <strong>${schedule.available_seats}</strong></p>
 
-              <button class="btn"
-                onclick="selectTrip('${trajet.id}')">
-                Réserver
-              </button>
-            </div>
-          </div>
-        `;
-      });
-    }
+          <button class="btn" onclick="selectTrip('${schedule.id}')">
+            Réserver
+          </button>
+        </div>
+      </div>
+    `;
+  });
+}
 
-    /*********************************************************
-     * 4. Sélection trajet → booking.html
-     *********************************************************/
-    function selectTrip(id) {
-      window.location.href =
-        `booking.html?trajet_id=${id}&passengers=${passengers}`;
-    }
+/*********************************************************
+ * 4. Sélection trajet → booking.html
+ *********************************************************/
+function selectTrip(id) {
+  window.location.href = `booking.html?trajet_id=${id}&passengers=${passengers}`;
+}
 
-    /*********************************************************
-     * 5. Menu mobile toggle
-     *********************************************************/
-    const menuToggle = document.getElementById("menuToggle");
-    const navMenu = document.getElementById("navMenu");
+/*********************************************************
+ * 5. Menu mobile toggle
+ *********************************************************/
+const menuToggle = document.getElementById("menuToggle");
+const navMenu = document.getElementById("navMenu");
 
-    menuToggle.addEventListener("click", () => {
-      navMenu.classList.toggle("open");
-    });
+menuToggle.addEventListener("click", () => {
+  navMenu.classList.toggle("open");
+});
 
-    /*********************************************************
-     * 6. Lancer au chargement
-     *********************************************************/
-    loadResults();
+/*********************************************************
+ * 6. Lancer la fonction au chargement de la page
+ *********************************************************/
+loadResults();
   </script>
 
 </body>
