@@ -27,9 +27,7 @@
 
   <!-- Navigation au centre -->
   <nav class="main-nav" id="navMenu">
-    <a href="index.html">Accueil</a>
-    <a href="results.html">Résultats</a>
-    <a href="booking.html">Réservation</a>
+    <a href="index.html">Accueil</a>   
     <a href="confirmation.html" class="active">Confirmation</a>
     
   </nav>
@@ -80,7 +78,6 @@
 <script>
 // Fonction utilitaire pour formater le numéro
 function formatReservationId(rawId) {
-  // rawId = l'ID brut (ex: 11)
   return `TALA-2026-${String(rawId).padStart(3, "0")}`;
 }
 
@@ -88,20 +85,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   const confirmationDetails = document.getElementById("confirmationDetails");
   const seatsDisplay = document.getElementById("seatsDisplay");
 
-  /* ===========================
-     SUPABASE INIT
-  =========================== */
+  /*********************************************************
+   * 1️⃣ Connexion Supabase (même projet que booking)
+   *********************************************************/
   const { createClient } = window.supabase;
 
-  const supabaseUrl = "https://iyiuysgwbreaqkepilqn.supabase.co";
-  const supabaseKey =
-    "sb_publishable_uPwAsJaGU4m_ejyajmEv2A_dLgqIM3h";
+  const supabaseUrl = "https://fsxtngwitqpcfobijxqk.supabase.co";
+  const supabaseKey = "sb_publishable_J5FXAkT-ZPyiAEQP6oB8CA_wgDuYSm-";
 
   const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
-  /* ===========================
-     GET reservation_id FROM URL
-  =========================== */
+  /*********************************************************
+   * 2️⃣ Récupération ID réservation depuis URL
+   *********************************************************/
   const params = new URLSearchParams(window.location.search);
   const reservationId = params.get("reservation_id");
 
@@ -115,9 +111,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  /* ===========================
-     LOAD RESERVATION + TRAJET
-  =========================== */
+  /*********************************************************
+   * 3️⃣ Charger réservation + trajet + bus
+   *********************************************************/
   const { data: reservation, error } = await supabaseClient
     .from("reservations")
     .select(`
@@ -128,19 +124,23 @@ document.addEventListener("DOMContentLoaded", async () => {
       client_phone,
       passengers,
       passengers_list,
-      statut_paiement,
+      status,
+      total_price,
       created_at,
 
-      trajet:trajets (
-        ville_depart,
-        ville_arrivee,
-        date_depart,
-        heure_depart,
-        prix,
+      schedule:schedule_id (
+        departure_time,
+        arrival_time,
+        price,
 
-        bus:bus (
-          numero_bus,
-          agence:agences ( nom )
+        route:route_id (
+          departure_city,
+          arrival_city
+        ),
+
+        bus:bus_id (
+          bus_number,
+          agency:agency_id ( name )
         )
       )
     `)
@@ -155,15 +155,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  /* ===========================
-     CALCUL PRIX TOTAL
-  =========================== */
-  const prixUnitaire = reservation.trajet?.prix || 0;
-  const totalPrice = prixUnitaire * reservation.passengers;
+  /*********************************************************
+   * 4️⃣ Calcul du prix total
+   *********************************************************/
+  const totalPrice = reservation.total_price || 0;
 
-  /* ===========================
-     AFFICHAGE CONFIRMATION
-  =========================== */
+  /*********************************************************
+   * 5️⃣ Affichage confirmation
+   *********************************************************/
+  const departureDate = new Date(reservation.schedule?.departure_time).toLocaleString();
+
   confirmationDetails.innerHTML = `
     <h3 style="margin-bottom:10px;">🎫 Billet confirmé</h3>
 
@@ -178,15 +179,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     <hr/>
 
     <p><strong>🚌 Trajet :</strong> 
-      ${reservation.trajet.ville_depart} → ${reservation.trajet.ville_arrivee}
+      ${reservation.schedule?.route?.departure_city} → ${reservation.schedule?.route?.arrival_city}
     </p>
 
-    <p><strong>📅 Départ :</strong> 
-      ${reservation.trajet.date_depart} à ${reservation.trajet.heure_depart}
-    </p>
+    <p><strong>📅 Départ :</strong> ${departureDate}</p>
 
-    <p><strong>🚍 Bus :</strong> ${reservation.trajet.bus.numero_bus}</p>
-    <p><strong>🏢 Agence :</strong> ${reservation.trajet.bus.agence.nom}</p>
+    <p><strong>🚍 Bus :</strong> ${reservation.schedule?.bus?.bus_number}</p>
+    <p><strong>🏢 Agence :</strong> ${reservation.schedule?.bus?.agency?.name || "N/A"}</p>
 
     <hr/>
 
@@ -195,16 +194,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     <p style="margin-top:10px; font-weight:600; color:#27ae60;">
       Paiement : ${
-        reservation.statut_paiement === "PAYE"
+        reservation.status === "paid"
           ? "✅ Confirmé"
           : "⏳ En attente"
       }
     </p>
   `;
 
-  /* ===========================
-     AFFICHAGE SIÈGES
-  =========================== */
+  /*********************************************************
+   * 6️⃣ Affichage sièges
+   *********************************************************/
   const seats = reservation.passengers_list || [];
 
   if (seats.length > 0) {
@@ -216,16 +215,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     seatsDisplay.innerHTML = "<p>Aucun siège réservé.</p>";
   }
 
-  /* ===========================
-     PDF DOWNLOAD BUTTON
-  =========================== */
+  /*********************************************************
+   * 7️⃣ Bouton téléchargement PDF
+   *********************************************************/
   window.downloadTicket = () =>
     generatePDF(reservation.ticket_number, reservation, totalPrice);
 });
 
-/* ===========================
-   QR CODE
-=========================== */
+
+/*********************************************************
+ * 8️⃣ Génération QR Code
+ *********************************************************/
 function generateQRCode(ticketNumber) {
   return new Promise((resolve) => {
     const qrDiv = document.createElement("div");
@@ -233,8 +233,7 @@ function generateQRCode(ticketNumber) {
     new QRCode(qrDiv, {
       text: `https://talatrajet.com/verification.html?ticket=${ticketNumber}`,
       width: 200,
-      height: 200,
-      correctLevel: QRCode.CorrectLevel.H,
+      height: 200
     });
 
     setTimeout(() => {
@@ -244,20 +243,21 @@ function generateQRCode(ticketNumber) {
   });
 }
 
-/* ===========================
-   PDF BILLET COMPLET
-=========================== */
+
+/*********************************************************
+ * 9️⃣ Génération PDF billet
+ *********************************************************/
 async function generatePDF(ticketNumber, reservation, totalPrice) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
-  // Bandeau vert
+  // Bandeau
   doc.setFillColor(39, 174, 96);
   doc.rect(0, 0, 210, 25, "F");
 
-  doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
-  doc.text("TALA Trajet — Billet Officiel", 20, 17);
+  doc.setFontSize(16);
+  doc.text("TALA Trajet — Billet", 20, 17);
 
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(12);
@@ -266,13 +266,13 @@ async function generatePDF(ticketNumber, reservation, totalPrice) {
   doc.text(`Nom : ${reservation.client_name}`, 20, 50);
 
   doc.text(
-    `Trajet : ${reservation.trajet.ville_depart} → ${reservation.trajet.ville_arrivee}`,
+    `Trajet : ${reservation.schedule?.route?.departure_city} → ${reservation.schedule?.route?.arrival_city}`,
     20,
     65
   );
 
   doc.text(
-    `Départ : ${reservation.trajet.date_depart} à ${reservation.trajet.heure_depart}`,
+    `Départ : ${new Date(reservation.schedule?.departure_time).toLocaleString()}`,
     20,
     75
   );
@@ -282,7 +282,7 @@ async function generatePDF(ticketNumber, reservation, totalPrice) {
 
   // Sièges
   doc.text("Sièges :", 20, 115);
-  reservation.passengers_list.forEach((seat, index) => {
+  reservation.passengers_list?.forEach((seat, index) => {
     doc.text(`• Siège ${seat}`, 25, 125 + index * 7);
   });
 
@@ -290,14 +290,22 @@ async function generatePDF(ticketNumber, reservation, totalPrice) {
   const qrImage = await generateQRCode(ticketNumber);
   doc.addImage(qrImage, "PNG", 60, 170, 90, 90);
 
-  // Footer
-  doc.setFontSize(10);
-  doc.setTextColor(120);
-  doc.text("© 2026 TALA Trajet — Tous droits réservés", 20, 285);
-
   doc.save(`Billet_${ticketNumber}.pdf`);
 }
-  
+
+
+/*********************************************************
+ * 🔟 Menu mobile
+ *********************************************************/
+const menuToggle = document.getElementById("menuToggle");
+const navMenu = document.getElementById("navMenu");
+
+if (menuToggle && navMenu) {
+  menuToggle.addEventListener("click", () => {
+    navMenu.classList.toggle("open");
+    menuToggle.textContent = navMenu.classList.contains("open") ? "✕" : "☰";
+  });
+}
 </script>
 
 </body>
