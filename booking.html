@@ -411,13 +411,59 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
   }), { width: 200 });
 
   /*********************************************************
-   * 7️⃣b Paiement SHWARY (REMPLACE ORANGE)
-   *********************************************************/
-  setTimeout(() => {
-    window.location.href = `https://checkout.shwary.com/pay?amount=${reservation.total_price}&ref=${ticketNumber}`;
-  }, 1500);
+ * 7️⃣b Paiement SHWARY (via Edge Function sécurisé)
+ *********************************************************/
+try {
+  const res = await fetch("https://TON-PROJET.supabase.co/functions/v1/shwary-payment", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      reservation_id: reservation.id,
+      phone: reservation.client_phone,
+      amount: reservation.total_price
+    })
+  });
 
-});
+  const result = await res.json();
+
+  if (!res.ok) {
+    showToast(result.error || "Erreur paiement Shwary", "error");
+    return;
+  }
+
+  showToast("📲 Confirmez le paiement sur votre téléphone...", "info");
+
+  /*********************************************************
+   * ⏳ Vérification automatique du paiement (polling)
+   *********************************************************/
+  const interval = setInterval(async () => {
+    const { data: check } = await supabaseClient
+      .from("reservations")
+      .select("status")
+      .eq("id", reservation.id)
+      .single();
+
+    if (check?.status === "paid") {
+      clearInterval(interval);
+
+      showToast("✅ Paiement confirmé ! Redirection...", "success");
+
+      localStorage.setItem("reservationInfo", JSON.stringify(reservation));
+
+      window.location.href =
+        `confirmation.html?reservation_id=${reservation.id}`;
+    }
+  }, 3000);
+
+  // Stop après 10 minutes
+  setTimeout(() => clearInterval(interval), 10 * 60 * 1000);
+
+} catch (err) {
+  console.error(err);
+  showToast("❌ Erreur réseau paiement", "error");
+}
 
 /*********************************************************
  * 8️⃣ Lancer le chargement initial
