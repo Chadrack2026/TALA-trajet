@@ -186,31 +186,30 @@ button:hover { transform: translateY(-2px); }
 
 <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
 
-<script>
-/*********************************************************
+  <script>
+  /*********************************************************
  * 1️⃣ Connexion Supabase
  *********************************************************/
 const { createClient } = window.supabase;
 
 const supabaseClient = createClient(
-  "https://fsxtngwitqpcfobijxqk.supabase.co", // Utilise ton projet actuel
-  "sb_publishable_J5FXAkT-ZPyiAEQP6oB8CA_wgDuYSm-" // Clé publique
+  "https://fsxtngwitqpcfobijxqk.supabase.co",
+  "sb_publishable_J5FXAkT-ZPyiAEQP6oB8CA_wgDuYSm-"
 );
 
 /*********************************************************
  * 2️⃣ Paramètres URL
  *********************************************************/
 const params = new URLSearchParams(window.location.search);
-const scheduleId = params.get("trajet_id"); // correspond à schedules.id
+const scheduleId = params.get("trajet_id");
 
 let selectedSeats = [];
 let schedule = null;
 
 /*********************************************************
- * 3️⃣ Chargement du trajet (schedule)
+ * 3️⃣ Chargement du trajet
  *********************************************************/
 async function loadTrip() {
-  // 1️⃣ Charger le schedule avec bus et route
   const { data, error } = await supabaseClient
     .from("schedules")
     .select(`
@@ -236,13 +235,11 @@ async function loadTrip() {
 
   if (error || !data) {
     showToast("Trajet introuvable !", "error");
-    console.error(error);
     return;
   }
 
   schedule = data;
 
-  // 2️⃣ Récupérer les sièges déjà réservés (réservations PAYÉES)
   const { data: reservedData } = await supabaseClient
     .from("reservations")
     .select("passengers_list")
@@ -256,7 +253,6 @@ async function loadTrip() {
     }
   });
 
-  // 3️⃣ Affichage infos trajet
   const departureDate = new Date(schedule.departure_time).toLocaleString();
 
   document.getElementById("tripDetails").innerHTML = `
@@ -266,12 +262,11 @@ async function loadTrip() {
     <p>🪑 Sièges déjà pris : ${occupiedSeats.length}</p>
   `;
 
-  // 4️⃣ Générer les sièges
   generateSeats(schedule.bus?.total_seats || 0, occupiedSeats);
 }
 
 /*********************************************************
- * 4️⃣ Génération des sièges (2+2 + dernière rangée 5)
+ * 4️⃣ Génération des sièges
  *********************************************************/
 function generateSeats(totalSeats, occupiedSeats) {
   const container = document.getElementById("seatsContainer");
@@ -282,34 +277,37 @@ function generateSeats(totalSeats, occupiedSeats) {
   const normalSeats = totalSeats - lastRowSeats;
   const rows = Math.floor(normalSeats / 4);
 
-  // Rangées normales
   for (let r = 1; r <= rows; r++) {
     const rowDiv = document.createElement("div");
     rowDiv.classList.add("row");
 
-    // gauche
-    for (let i = 0; i < 2; i++) rowDiv.appendChild(createSeat(seatNumber++, occupiedSeats));
+    for (let i = 0; i < 2; i++) {
+      rowDiv.appendChild(createSeat(seatNumber++, occupiedSeats));
+    }
 
-    // allée
     const aisle = document.createElement("div");
     aisle.classList.add("aisle");
     rowDiv.appendChild(aisle);
 
-    // droite
-    for (let i = 0; i < 2; i++) rowDiv.appendChild(createSeat(seatNumber++, occupiedSeats));
+    for (let i = 0; i < 2; i++) {
+      rowDiv.appendChild(createSeat(seatNumber++, occupiedSeats));
+    }
 
     container.appendChild(rowDiv);
   }
 
-  // Dernière rangée
   const lastRow = document.createElement("div");
   lastRow.classList.add("last-row");
-  for (let i = 0; i < lastRowSeats; i++) lastRow.appendChild(createSeat(seatNumber++, occupiedSeats));
+
+  for (let i = 0; i < lastRowSeats; i++) {
+    lastRow.appendChild(createSeat(seatNumber++, occupiedSeats));
+  }
+
   container.appendChild(lastRow);
 }
 
 /*********************************************************
- * 5️⃣ Création d’un siège
+ * 5️⃣ Création siège
  *********************************************************/
 function createSeat(num, occupiedSeats) {
   const seat = document.createElement("div");
@@ -326,7 +324,7 @@ function createSeat(num, occupiedSeats) {
 }
 
 /*********************************************************
- * 6️⃣ Sélection / désélection des sièges
+ * 6️⃣ Sélection sièges
  *********************************************************/
 function toggleSeat(num, seatDiv) {
   if (selectedSeats.includes(num)) {
@@ -343,7 +341,7 @@ function toggleSeat(num, seatDiv) {
 }
 
 /*********************************************************
- * 7️⃣ Soumission formulaire réservation
+ * 7️⃣ Soumission réservation
  *********************************************************/
 document.getElementById("bookingForm").addEventListener("submit", async e => {
   e.preventDefault();
@@ -355,21 +353,9 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
 
   const formData = new FormData(e.target);
 
-  // Génération ticket_number
-  const { data: lastRes } = await supabaseClient
-    .from("reservations")
-    .select("ticket_number")
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  /**************** ✅ CORRECTION ICI ****************/
+  const ticketNumber = `TALA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-  const nextNum = lastRes
-    ? parseInt(lastRes.ticket_number.split("-")[2]) + 1
-    : 1;
-
-  const ticketNumber = `TALA-${new Date().getFullYear()}-${String(nextNum).padStart(3, "0")}`;
-
-  // Préparer les données de réservation
   const reservationData = {
     schedule_id: scheduleId,
     bus_id: schedule.bus?.id,
@@ -396,82 +382,61 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
     return;
   }
 
-  showToast("✅ Réservation enregistrée ! Redirection paiement...", "success");
+  showToast("✅ Réservation enregistrée !", "success");
 
-  /*********************************************************
-   * 7️⃣a Génération du QR Code pour le billet
-   *********************************************************/
-  const qrSection = document.getElementById("qrSection");
-  if(qrSection) qrSection.style.display = "block";
+  /**************** PAIEMENT ****************/
+  try {
+    const res = await fetch("https://fsxtngwitqpcfobijxqk.supabase.co/functions/v1/shwary-payment", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    reservation_id: reservation.id,
+    phone: reservation.client_phone,
+    amount: reservation.total_price
+  })
+});
 
-  QRCode.toCanvas(document.getElementById("qrcode"), JSON.stringify({
-    ticket_number: ticketNumber,
-    schedule_id: scheduleId,
-    seats: selectedSeats
-  }), { width: 200 });
+    const result = await res.json();
 
-  /*********************************************************
- * 7️⃣b Paiement SHWARY (via Edge Function sécurisé)
- *********************************************************/
-try {
-  const res = await fetch("https://TON-PROJET.supabase.co/functions/v1/shwary-payment", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      reservation_id: reservation.id,
-      phone: reservation.client_phone,
-      amount: reservation.total_price
-    })
-  });
-
-  const result = await res.json();
-
-  if (!res.ok) {
-    showToast(result.error || "Erreur paiement Shwary", "error");
-    return;
-  }
-
-  showToast("📲 Confirmez le paiement sur votre téléphone...", "info");
-
-  /*********************************************************
-   * ⏳ Vérification automatique du paiement (polling)
-   *********************************************************/
-  const interval = setInterval(async () => {
-    const { data: check } = await supabaseClient
-      .from("reservations")
-      .select("status")
-      .eq("id", reservation.id)
-      .single();
-
-    if (check?.status === "paid") {
-      clearInterval(interval);
-
-      showToast("✅ Paiement confirmé ! Redirection...", "success");
-
-      localStorage.setItem("reservationInfo", JSON.stringify(reservation));
-
-      window.location.href =
-        `confirmation.html?reservation_id=${reservation.id}`;
+    if (!res.ok) {
+      showToast(result.error || "Erreur paiement Shwary", "error");
+      return;
     }
-  }, 3000);
 
-  // Stop après 10 minutes
-  setTimeout(() => clearInterval(interval), 10 * 60 * 1000);
+    showToast("📲 Confirmez le paiement sur votre téléphone...", "info");
 
-} catch (err) {
-  console.error(err);
-  showToast("❌ Erreur réseau paiement", "error");
-}
+    const interval = setInterval(async () => {
+      const { data: check } = await supabaseClient
+        .from("reservations")
+        .select("status")
+        .eq("id", reservation.id)
+        .single();
+
+      if (check?.status === "paid") {
+        clearInterval(interval);
+
+        showToast("✅ Paiement confirmé !", "success");
+
+        window.location.href =
+          `confirmation.html?reservation_id=${reservation.id}`;
+      }
+    }, 3000);
+
+    setTimeout(() => clearInterval(interval), 10 * 60 * 1000);
+
+  } catch (err) {
+    console.error(err);
+    showToast("❌ Erreur réseau paiement", "error");
+  }
+});
 
 /*********************************************************
- * 8️⃣ Lancer le chargement initial
+ * 8️⃣ INIT
  *********************************************************/
 loadTrip();
 
 /*********************************************************
- * 9️⃣ Toast notifications
+ * 9️⃣ Toast
  *********************************************************/
 function showToast(message, type = "info", duration = 3000) {
   const container = document.getElementById("toast-container");
@@ -481,16 +446,14 @@ function showToast(message, type = "info", duration = 3000) {
   toast.innerText = message;
   container.appendChild(toast);
 
-  // animation d’apparition
   setTimeout(() => toast.classList.add("show"), 100);
 
-  // disparition après durée
   setTimeout(() => {
     toast.classList.remove("show");
     setTimeout(() => toast.remove(), 500);
   }, duration);
 }
-  </script> 
+  </script>
 
 </body>
 </html>
