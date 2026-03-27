@@ -353,7 +353,7 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
 
   const formData = new FormData(e.target);
 
-  /**************** ✅ CORRECTION ICI ****************/
+  // Génération ticket
   const ticketNumber = `TALA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
   const reservationData = {
@@ -361,16 +361,17 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
     bus_id: schedule.bus?.id,
     client_name: formData.get("name"),
     email: formData.get("email"),
-    client_phone: formData.get("phone"),
+    clientPhoneNumber: formData.get("phone"),
     passengers: selectedSeats.length,
     passengers_list: selectedSeats,
     status: "pending",
     price_per_seat: schedule.price,
-    total_price: selectedSeats.length * schedule.price,
+    amount: selectedSeats.length * schedule.price,
     ticket_number: ticketNumber,
     expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
   };
 
+  // Enregistrer réservation
   const { data: reservation, error } = await supabaseClient
     .from("reservations")
     .insert([reservationData])
@@ -384,17 +385,18 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
 
   showToast("✅ Réservation enregistrée !", "success");
 
-  /**************** PAIEMENT ****************/
+  /**************** PAIEMENT SHWARY ****************/
   try {
     const res = await fetch("https://fsxtngwitqpcfobijxqk.supabase.co/functions/v1/shwary-payment", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    reservation_id: reservation.id,
-    phone: reservation.client_phone,
-    amount: reservation.total_price
-  })
-});
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reservation_id: reservation.id,
+        clientPhoneNumber: reservation.client_phone,  // Conformité avec la Function
+        amount: reservation.total_price,
+        countryCode: "DRC"  // À adapter selon le pays
+      })
+    });
 
     const result = await res.json();
 
@@ -405,6 +407,7 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
 
     showToast("📲 Confirmez le paiement sur votre téléphone...", "info");
 
+    // Polling pour vérifier le statut
     const interval = setInterval(async () => {
       const { data: check } = await supabaseClient
         .from("reservations")
@@ -412,16 +415,14 @@ document.getElementById("bookingForm").addEventListener("submit", async e => {
         .eq("id", reservation.id)
         .single();
 
-      if (check?.status === "paid") {
+      if (check?.status === "completed") {  // 'completed' envoyé depuis le callback Shwary
         clearInterval(interval);
-
         showToast("✅ Paiement confirmé !", "success");
-
-        window.location.href =
-          `confirmation.html?reservation_id=${reservation.id}`;
+        window.location.href = `confirmation.html?reservation_id=${reservation.id}`;
       }
     }, 3000);
 
+    // Stop le polling après 10 minutes
     setTimeout(() => clearInterval(interval), 10 * 60 * 1000);
 
   } catch (err) {
